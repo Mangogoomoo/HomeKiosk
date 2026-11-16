@@ -47,6 +47,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -81,6 +82,7 @@ class MainActivity : AppCompatActivity() {
     private val dimSteps = intArrayOf(0, 15, 30, 60, 120, 300, 600, 1800)
 
     private val dimRunnable = Runnable { dim() }
+    private val hideBarsRunnable = Runnable { hideSystemUi() }
     private val retryRunnable = Runnable { loadedUrl?.let { webView.loadUrl(it) } }
     private val reloadRunnable = object : Runnable {
         override fun run() {
@@ -137,6 +139,15 @@ class MainActivity : AppCompatActivity() {
                 val half = dp(100) // Android allows at most 200dp per edge
                 v.systemGestureExclusionRects = listOf(Rect(0, mid - half, dp(EDGE_DP), mid + half))
             }
+        }
+
+        // Some tablets leave the system bars visible after an edge swipe instead of hiding
+        // them again. Whenever they appear, push them away again after a short moment.
+        ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { v, insets ->
+            if (insets.isVisible(WindowInsetsCompat.Type.navigationBars()) ||
+                insets.isVisible(WindowInsetsCompat.Type.statusBars())
+            ) scheduleHideBars()
+            ViewCompat.onApplyWindowInsets(v, insets)
         }
 
         setupWebView()
@@ -307,6 +318,7 @@ class MainActivity : AppCompatActivity() {
             return true
         }
         resetIdleTimer()
+        if (ev.actionMasked == MotionEvent.ACTION_UP) scheduleHideBars()
         return super.dispatchTouchEvent(ev)
     }
 
@@ -540,6 +552,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------------------------------------------------------------- kiosk lock
+
+    private fun scheduleHideBars() {
+        handler.removeCallbacks(hideBarsRunnable)
+        handler.postDelayed(hideBarsRunnable, 2_000)
+    }
 
     private fun hideSystemUi() {
         val c = WindowCompat.getInsetsController(window, window.decorView)
